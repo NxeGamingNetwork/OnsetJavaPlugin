@@ -3,36 +3,66 @@ Authors: JanHolger, Digital
 
 ### Features
 * Create JVMs.
-* Communicate from Lua <-> Java.
+* Communicate between Lua <-> Java.
 
 ### Download
 Check out Releases for a download to Windows & Linux builds.
 
-### Issues
-If you have the following error in console while loading our Java plugin,
-```
-[2019-12-27 20:01:37] [info] Loading plugin "OnsetJavaPlugin"
-[2019-12-27 20:01:37] [error] Failed loading "OnsetJavaPlugin": The specified module could not be found.
-```
-This is typically an issue with Windows users. To fix this, add your Java 8 bin/server folder to your PATH configuration. Example of JDK (or JRE) path:
-```C:\Program Files\Java\jdk1.8.0_221\jre\bin\server```
-Make sure your Java installation is 64 bit otherwise it won't have the required JNI libraries we use.
+### Installation
+1. Download OnsetJavaPlugin.dll (Windows) & OnsetJavaPlugin.so (Linux) from Releases ([HERE](https://github.com/OnfireNetwork/OnsetJavaPlugin/releases)) and place inside plugins folder.
+1. Ensure Java 8 JDK/JRE 64bit is installed.
+1. Enable "OnsetJavaPlugin" as a plugin inside server_config.json.
 
 ### Data Types we support
 #### Method Parameters
 * Lua String -> String (java.lang.String)
 * Lua Int -> Integer (java.lang.Integer)
+* Lua Number -> Double (java.lang.Double)
 * Lua Bool -> Boolean (java.lang.Boolean)
 * Lua Table -> Map (java.util.HashMap)
+* Lua Function -> LuaFunction (lua.LuaFunction, lua function support interface required)
 
 #### Return Values
 * String (java.lang.String)
 * Integer (java.lang.Integer)
+* Double (java.lang.Double)
 * Boolean (java.lang.Boolean)
 * List (java.util.List)
 * Map (java.util.Map)
 
 We will be adding more data types later on.
+
+#### Using the lua function support interface
+##### Maven
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+<dependencies>
+    <dependency>
+        <groupId>com.github.OnfireNetwork</groupId>
+        <artifactId>OnsetJavaPlugin</artifactId>
+        <version>2357546bd5</version>
+    </dependency>
+</dependencies>
+```
+##### Usage
+Java:
+```java
+public static void example(LuaFunction fn){
+    fn.call("Hello from Java!");
+    fn.close(); // Always call this when you don't need the function anymore to free memory
+}
+```
+Lua:
+```lua
+CallJavaStaticMethod(java, "example/Example", "example", "(Llua/LuaFunction;)V", function(msg)
+    print(msg)
+end)
+```
 
 ### Lua Functions
 #### CreateJava
@@ -40,7 +70,7 @@ Create a new JVM with a jar. Returns JVM ID.
 ```lua
 local jvmID = CreateJava(path)
 ```
-* **path** Relative path to the jar file, relative from the root server directory. Example: path/to/file.jar
+* **path** Classpath for the jvm. This parameter is optional. When not provided it will include the "java" directory aswell as all jar files inside or "." when "java" doesn't exist.
 
 #### DestroyJava
 Destroy a JVM.
@@ -69,21 +99,33 @@ LinkJavaAdapter(jvmID, className)
 * **className** Class name of the class you want to call a method in, must include package path as well. Example: dev/joseph/Adapter (dev.joseph.Adapter).
 
 ### Java Native Methods
-#### callEvent
-Call Lua events from Java.
+You can use a native adapter to call lua functions.
 ```java
+package example;
 public class Adapter {
-    public native static void callEvent(String event, List<Object> args);
+    public native static void callEvent(String event, Object... args);
+    public native static Object[] callGlobalFunction(String packageName, String functionName, Object... args);
 }
 ```
-Example:
-```java
-Adapter.callEvent("testCallEvent", Arrays.asList("lol", "haha", "yeah"));
-Adapter.callEvent("testCallEvent", Arrays.asList(1, 2, "hi", 384, "yeeep", true, false));
-```
 ```lua
-function testCallEvent(arg1)
-  print ('first arg is ' .. arg1)
-end
-AddEvent('testCallEvent', testCallEvent)
+LinkJavaAdapter(java, "example/Adapter")
+```
+#### callEvent
+Java:
+```java
+Adapter.callEvent("testCallEvent", "hi", Integer.valueOf(123), Boolean.valueOf(true));
+```
+Lua:
+```lua
+AddEvent('testCallEvent', function(s,i,b)
+    print(s)
+    print(i)
+    print(b)
+end)
+```
+#### callGlobalFunction
+*Make sure to use this method only on the main thread. Using it outside the mainthread can result in unexpected behavior.*  
+Java:
+```java
+Adapter.callGlobalFunction("AddPlayerChatAll", "Hello World");
 ```

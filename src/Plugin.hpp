@@ -2,10 +2,12 @@
 
 #include <vector>
 #include <tuple>
+#include <map>
 #include <functional>
 #include <jni.h>
 #include <PluginSDK.h>
 #include "Singleton.hpp"
+#include "JavaEnv.hpp"
 
 class Plugin : public Singleton<Plugin>
 {
@@ -13,8 +15,9 @@ class Plugin : public Singleton<Plugin>
 private:
 	Plugin();
 	~Plugin() = default;
-	JavaVM *jvms[30];
-	JNIEnv* jenvs[30];
+	JavaEnv* jenvs[30];
+	std::map<std::string, lua_State*> packageStates;
+	std::map<lua_State*, std::string> statePackages;
 
 private:
 	using FuncInfo_t = std::tuple<const char *, lua_CFunction>;
@@ -31,11 +34,22 @@ public:
 	{
 		return _func_list;
 	}
+	void AddPackage(std::string name, lua_State* state) {
+		this->packageStates[name] = state;
+		this->statePackages[state] = name;
+	}
+	void RemovePackage(std::string name) {
+		this->statePackages[this->packageStates[name]] = nullptr;
+		this->packageStates[name] = nullptr;
+	}
+	lua_State* GetPackageState(std::string name) {
+		return this->packageStates[name];
+	}
+	std::string GetStatePackage(lua_State* L) {
+		return this->statePackages[L];
+	}
 	int CreateJava(std::string classPath);
 	void DestroyJava(int id);
-	JavaVM* GetJavaVM(int id);
-	JNIEnv* GetJavaEnv(int id);
-
-	jobject ToJavaObject(JNIEnv* jenv, Lua::LuaValue value);
-	Lua::LuaValue ToLuaValue(JNIEnv* jenv, jobject object);
+	JavaEnv* GetJavaEnv(int id);
+	JavaEnv* FindJavaEnv(JNIEnv* jenv);
 };
